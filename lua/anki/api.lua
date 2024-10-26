@@ -127,9 +127,6 @@ API.addCards = function(parsed)
           version = 6,
           params = params,
       })
-      if not status then
-          error(res)
-      end
     end
     return res
 end

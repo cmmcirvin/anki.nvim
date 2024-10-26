@@ -96,14 +96,42 @@ API.modelFieldNames = function(name)
 end
 
 API.guiAddCards = function(params)
-    -- vim.print([[[lua/anki/api.lua:97] params: ]] .. vim.inspect(params))
-    -- local status, res = pcall(API.request, )
-
     return API.request({
         action = "guiAddCards",
         version = 6,
         params = params,
     })
+end
+
+API.addCards = function(parsed)
+    deckName = vim.fn.input("Deck Name: ")
+    for i, v in ipairs(parsed.cards) do
+      v.deckName = deckName
+
+      params = {
+        note = v
+      }
+
+      params.note.options = {
+        allowDuplicate = false,
+        duplicateScope = "deck",
+        duplicateScopeOptions = {
+          deckName = vim.NIL,
+          checkChildren = false,
+          checkAllModels = false
+        }
+      }
+
+      status, res = pcall(API.request, {
+          action = "addNote",
+          version = 6,
+          params = params,
+      })
+      if not status then
+          error(res)
+      end
+    end
+    return res
 end
 
 API.addNote = function(params, allow_duplicate)

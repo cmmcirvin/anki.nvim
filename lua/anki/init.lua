@@ -475,88 +475,16 @@ anki.send = function(opts)
     local cur_buf = vim.api.nvim_buf_get_lines(0, 0, -1, false)
     local parsed = buffer.all(cur_buf, Config.transformers)
 
-    if parsed.note.noteId then
-        local note_id = tonumber(parsed.note.noteId)
-        assert(note_id)
-
-        local is_success, data
-        if vim.g["_anki_update_note"] then
-            local open_type = vim.g["_anki_update_note"].open_type
-            local query = vim.g["_anki_update_note"].query
-            local card_id = vim.g["_anki_update_note"].card_id
-
-            if open_type == "reviewer" then
-                is_success, data = api.updateNote({
-                    fields = parsed.note.fields,
-                    id = note_id,
-                    tags = parsed.note.tags,
-                })
-            elseif open_type == "browser" then
-                api.invalidateGuiBrowser()
-                is_success, data = api.updateNote({
-                    fields = parsed.note.fields,
-                    id = note_id,
-                    tags = parsed.note.tags,
-                })
-                api.guiBrowse(query)
-                api.guiSelectNote(card_id)
-            else
-                UTIL.notify_info(
-                    "Wrong open_type. "
-                        .. open_type
-                        .. ". Something wrong with your anki addon"
-                )
-                return {}
-            end
-        else
-            api.invalidateGuiBrowser()
-            is_success, data = api.updateNote({
-                fields = parsed.note.fields,
-                id = note_id,
-                tags = parsed.note.tags,
-            })
-            api.guiBrowse("nid:" .. parsed.note.noteId)
-        end
-
-        if is_success then
-            UTIL.notify_info("Card was updated")
-            unlock()
-            return { successfullyUpdated = true }
-        end
-
-        UTIL.notify_info("Card was not updated")
-        UTIL.notify_error(vim.inspect(data))
-        return { successfullyUpdated = false }
-    end
-
-    local is_success, data = pcall(api.addNote, parsed, false)
+    local is_success, data = pcall(api.addCards, parsed, false)
 
     if is_success then
         UTIL.notify_info("Card was added")
         unlock()
-        fields_of_last_note = parsed.note.fields
+        fields_of_last_note = parsed.cards[#parsed.cards].fields
         return { successfullySent = true }
     end
 
-    if string.find(data, "duplicate") then
-        if allow_duplicate then
-            -- adding again because there is no API for just checking for duplicates in AnkiConnect
-            is_success, data = pcall(api.addNote, parsed, true)
-            if is_success then
-                UTIL.notify_info("Card was added. Card you added was a duplicate.")
-                unlock()
-                fields_of_last_note = parsed.note.fields
-                return { successfullySent = true }
-            else
-                UTIL.notify_error(data)
-            end
-        else
-            UTIL.notify_error("Card you are trying to add is a duplicate")
-        end
-    else
-        UTIL.notify_error(data)
-    end
-
+    UTIL.notify_error(data)
     return { successfullySent = false }
 end
 
@@ -691,23 +619,6 @@ local function load()
     vim.api.nvim_set_hl(0, "ankiTags", { link = "Special" })
     vim.api.nvim_set_hl(0, "ankiNoteId", { link = "Special" })
     vim.api.nvim_set_hl(0, "ankiField", { link = "@module" })
-
-    vim.api.nvim_create_autocmd({ "BufWritePost", "InsertLeave" }, {
-        group = AUTOCMD_GROUP,
-        pattern = "*.anki",
-        callback = function()
-            require("anki.linter").lint(
-                vim.api.nvim_buf_get_lines(0, 0, -1, false),
-                Config.linters
-            )
-        end,
-    })
-
-    vim.api.nvim_create_autocmd("BufEnter", {
-        group = AUTOCMD_GROUP,
-        pattern = "*.anki",
-        callback = create_lock,
-    })
 end
 
 local function launch()
@@ -759,15 +670,9 @@ anki.setup = function(user_cfg)
             end,
         })
     else
-        vim.filetype.add({
-            extension = {
-                anki = "anki",
-            },
-        })
-
         vim.api.nvim_create_autocmd("FileType", {
             group = AUTOCMD_GROUP,
-            pattern = "anki",
+            pattern = "markdown",
             callback = function()
                 local status, res = pcall(launch)
                 if not status then
@@ -1017,11 +922,7 @@ local function open_note(noteId)
     local temp_file = vim.fn.tempname()
     vim.cmd.edit(temp_file)
 
-    if Config.tex_support then
-        vim.bo.filetype = "tex.anki"
-    else
-        vim.bo.filetype = "anki"
-    end
+    vim.bo.filetype = "anki"
 
     local note = BUFFER.parse_form_from_anki(note_from_anki)
     local anki_table = require("anki.buffer").create(

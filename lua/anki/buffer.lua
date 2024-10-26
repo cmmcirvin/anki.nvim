@@ -93,7 +93,7 @@ end
 ---Parses an input into a table with 'note' subtable which can be send AnkiConnect
 ---@return Form, table?
 M.parse = function(input)
-    local result = { fields = {} }
+    local result = { cards = {} }
 
     local lines
     if type(input) == "string" then
@@ -104,64 +104,127 @@ M.parse = function(input)
 
     local is_inside_field = { is = false, name = "", content = {}, line_number = -1 }
 
+    card = {}
+    in_card = false
+
     for line_counter, line in ipairs(lines) do
-        if line:sub(1, 2) == [[%%]] then
-            local line_by_space = vim.split(line, " ", {})
-
-            if line_by_space[1] == "%%TAGS" then
-                table.remove(line_by_space, 1)
-                result.tags = line_by_space
-                goto continue
+        -- Basic format, new card
+        if string.len(line) > 5 and line:sub(1,5) == [[> **_]] then
+            if in_card then
+              table.insert(result.cards, card)
+              card = {}
+              in_card = false
             end
-
-
-            if line_by_space[1] == "%%MODELNAME" then
-                table.remove(line_by_space, 1)
-                result.modelName = table.concat(line_by_space, " ")
-                goto continue
-            end
-
-            if line_by_space[1] == "%%NOTEID" then
-                table.remove(line_by_space, 1)
-                result.noteId = table.concat(line_by_space, " ")
-                goto continue
-            end
-
-            if line_by_space[1] == "%%DECKNAME" then
-                table.remove(line_by_space, 1)
-                result.deckName = table.concat(line_by_space, " ")
-                goto continue
-            end
-        end
-
-        if line:sub(1, 1) == [[%]] then
-            if is_inside_field.is then
-                if result.fields[is_inside_field.name] == nil then
-                    result.fields[is_inside_field.name] = is_inside_field.content
-                    result.fields[is_inside_field.name].line_number = is_inside_field.line_number
-                        - 1
-                else
-                    UTIL.notify_info("Field with name '" .. is_inside_field.name .. "' appears twice. Overwrote the data")
-                end
-
-                is_inside_field.is = false
-            else
-                is_inside_field = {
-                    is = true,
-                    name = line:sub(2, -1),
-                    content = {},
-                    line_number = line_counter,
+            card = {
+                modelName = "Basic",
+                fields = {
+                  Front = line:sub(6, string.find(line, "_**", 6) - 1),
+                  Back = line:sub(string.find(line, "_**", 6) + 3, -1),
+                  Source = "",
                 }
-            end
-
+            }
+            in_card = true
             goto continue
         end
 
-        if is_inside_field.is then
-            table.insert(is_inside_field.content, line)
+        if in_card then
+          -- Basic format, continue card
+          if string.len(line) > 6 and line:sub(1,6) == [[> <br>]] then
+            line = line:sub(8, -1)
+
+            -- Replace `` with <code></code>
+            begin_match, end_match = string.find(line, '`.-`')
+            while begin_match do
+              line = line:sub(1, begin_match - 1) .. "<code>" .. line:sub(begin_match + 1, end_match - 1) .. "</code>" .. line:sub(end_match + 1, -1)
+              begin_match, end_match = string.find(line, '`.-`')
+            end
+
+            -- Replace ![](img_path) with <img src="img_path">
+            begin_match, end_match = string.find(line, '!%[%]%(.-%)')
+            while begin_match do
+              img_path = line:sub(begin_match + 4, end_match - 1)
+              begin_username, end_username = string.find(img_path, "/Users")
+              img_path = img_path:sub(begin_username, -1)
+              img_name = string.match(img_path, ".-([^/]-[^/%.]+)$")
+
+              line = line:sub(1, begin_match - 1) .. '<img src="' .. img_name .. '">' .. line:sub(end_match + 1, -1)
+
+              -- Store image in Anki, so that it can be referenced later
+              status, data = pcall(require("anki.api").storeMediaFile, {
+                  filename = img_name,
+                  path = img_path,
+                  deleteExisting = false,
+              })
+
+              begin_match, end_match = string.find(line, '!%[%]%(.-%)')
+            end
+
+            -- Replace $$ with <anki-mathjax></anki-mathjax>
+            begin_match, end_match = string.find(line, '%$.-%$')
+            while begin_match do
+              line = line:sub(1, begin_match - 1) .. "<anki-mathjax>" .. line:sub(begin_match + 1, end_match - 1) .. "</anki-mathjax>" .. line:sub(end_match + 1, -1)
+              begin_match, end_match = string.find(line, '%$.-%$')
+            end
+
+            if string.len(card.fields.Back) > 0 then
+              card.fields.Back = card.fields.Back .. "<br>" .. line
+            else
+              card.fields.Back = line
+            end
+          -- Exited card
+          else
+            table.insert(result.cards, card)
+            card = {}
+            in_card = false
+          end
+          goto continue
+        end
+
+        -- Cloze format, single line
+        if string.len(line) > 2 and line:sub(1,2) == [[> ]] then
+            line = line:sub(3, -1)
+            begin_match, end_match = string.find(line, '%*%*.-%*%*')
+
+            -- Replace `` with <code></code>
+            begin_match, end_match = string.find(line, '`.-`')
+            while begin_match do
+              line = line:sub(1, begin_match - 1) .. "<code>" .. line:sub(begin_match + 1, end_match - 1) .. "</code>" .. line:sub(end_match + 1, -1)
+              begin_match, end_match = string.find(line, '`.-`')
+            end
+
+            -- Replace $$ with <anki-mathjax></anki-mathjax>
+            begin_match, end_match = string.find(line, '%$.-%$')
+            while begin_match do
+              line = line:sub(1, begin_match - 1) .. "<anki-mathjax>" .. line:sub(begin_match + 1, end_match - 1) .. "</anki-mathjax>" .. line:sub(end_match + 1, -1)
+              begin_match, end_match = string.find(line, '%$.-%$')
+            end
+
+            -- Replace ** with {{c1::}}
+            cloze_idx = 1
+            begin_match, end_match = string.find(line, '%*%*.-%*%*')
+            while begin_match do
+              line = line:sub(1, begin_match - 1) .. "{{c" .. cloze_idx .. "::" .. line:sub(begin_match + 2, end_match - 2) .. "}}" .. line:sub(end_match + 1, -1)
+              begin_match, end_match = string.find(line, '%*%*.-%*%*')
+              cloze_idx = cloze_idx + 1
+            end
+            card = {
+                modelName = "Cloze",
+                fields = {
+                  Text = line
+                }
+            }
+            table.insert(result.cards, card)
+            card = {}
+            goto continue
         end
 
         ::continue::
+    end
+
+    if in_card then
+      table.insert(result.cards, card)
+      card = {}
+      in_card = false
     end
 
     return result
@@ -223,16 +286,8 @@ M.transform = function(form, transformers)
 end
 
 M.all = function(cur_buf, transformers)
-    local form = M.parse(cur_buf)
-    form = M.transform(form, transformers)
-
-    -- TODO: add tagger
-
-    for k, v in pairs(form.fields) do
-        form.fields[k] = M.concat_lines(v)
-    end
-
-    return { note = form }
+    -- Ignoring transformers functionality for now
+    return M.parse(cur_buf)
 end
 
 return M

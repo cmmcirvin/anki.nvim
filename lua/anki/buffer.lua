@@ -90,6 +90,44 @@ M.create = function(fields, deckname, modelname, context, latex_support, noteId)
     }
 end
 
+convert_line_to_anki_format = function(line)
+    -- Replace `` with <code></code>
+    begin_match, end_match = string.find(line, '`.-`')
+    while begin_match do
+      line = line:sub(1, begin_match - 1) .. "<code>" .. line:sub(begin_match + 1, end_match - 1) .. "</code>" .. line:sub(end_match + 1, -1)
+      begin_match, end_match = string.find(line, '`.-`')
+    end
+
+    -- Replace ![](img_path) with <img src="img_path">
+    begin_match, end_match = string.find(line, '!%[%]%(.-%)')
+    while begin_match do
+      img_path = line:sub(begin_match + 4, end_match - 1)
+      begin_username, end_username = string.find(img_path, "/Users")
+      img_path = img_path:sub(begin_username, -1)
+      img_name = string.match(img_path, ".-([^/]-[^/%.]+)$")
+
+      line = line:sub(1, begin_match - 1) .. '<img src="' .. img_name .. '">' .. line:sub(end_match + 1, -1)
+
+      -- Store image in Anki, so that it can be referenced later
+      status, data = pcall(require("anki.api").storeMediaFile, {
+          filename = img_name,
+          path = img_path,
+          deleteExisting = false,
+      })
+
+      begin_match, end_match = string.find(line, '!%[%]%(.-%)')
+    end
+
+    -- Replace $$ with <anki-mathjax></anki-mathjax>
+    begin_match, end_match = string.find(line, '%$.-%$')
+    while begin_match do
+      line = line:sub(1, begin_match - 1) .. "<anki-mathjax>" .. line:sub(begin_match + 1, end_match - 1) .. "</anki-mathjax>" .. line:sub(end_match + 1, -1)
+      begin_match, end_match = string.find(line, '%$.-%$')
+    end
+
+    return line
+end
+
 ---Parses an input into a table with 'note' subtable which can be send AnkiConnect
 ---@return Form, table?
 M.parse = function(input)
@@ -115,11 +153,14 @@ M.parse = function(input)
               card = {}
               in_card = false
             end
+            line = line:sub(6, string.find(line, "_**", 6) - 1)
+            line = convert_line_to_anki_format(line)
+
             card = {
                 modelName = "Basic",
                 fields = {
-                  Front = line:sub(6, string.find(line, "_**", 6) - 1),
-                  Back = line:sub(string.find(line, "_**", 6) + 3, -1),
+                  Front = line,
+                  Back = "",
                   Source = "",
                 }
             }
@@ -129,45 +170,11 @@ M.parse = function(input)
 
         if in_card then
           -- Basic format, continue card
-          if string.len(line) > 6 and line:sub(1,6) == [[> <br>]] then
-            line = line:sub(8, -1)
-
-            -- Replace `` with <code></code>
-            begin_match, end_match = string.find(line, '`.-`')
-            while begin_match do
-              line = line:sub(1, begin_match - 1) .. "<code>" .. line:sub(begin_match + 1, end_match - 1) .. "</code>" .. line:sub(end_match + 1, -1)
-              begin_match, end_match = string.find(line, '`.-`')
-            end
-
-            -- Replace ![](img_path) with <img src="img_path">
-            begin_match, end_match = string.find(line, '!%[%]%(.-%)')
-            while begin_match do
-              img_path = line:sub(begin_match + 4, end_match - 1)
-              begin_username, end_username = string.find(img_path, "/Users")
-              img_path = img_path:sub(begin_username, -1)
-              img_name = string.match(img_path, ".-([^/]-[^/%.]+)$")
-
-              line = line:sub(1, begin_match - 1) .. '<img src="' .. img_name .. '">' .. line:sub(end_match + 1, -1)
-
-              -- Store image in Anki, so that it can be referenced later
-              status, data = pcall(require("anki.api").storeMediaFile, {
-                  filename = img_name,
-                  path = img_path,
-                  deleteExisting = false,
-              })
-
-              begin_match, end_match = string.find(line, '!%[%]%(.-%)')
-            end
-
-            -- Replace $$ with <anki-mathjax></anki-mathjax>
-            begin_match, end_match = string.find(line, '%$.-%$')
-            while begin_match do
-              line = line:sub(1, begin_match - 1) .. "<anki-mathjax>" .. line:sub(begin_match + 1, end_match - 1) .. "</anki-mathjax>" .. line:sub(end_match + 1, -1)
-              begin_match, end_match = string.find(line, '%$.-%$')
-            end
+          if string.len(line) > 0 then
+            line = convert_line_to_anki_format(line)
 
             if string.len(card.fields.Back) > 0 then
-              card.fields.Back = card.fields.Back .. "<br>" .. line
+              card.fields.Back = card.fields.Back .. line
             else
               card.fields.Back = line
             end
@@ -183,21 +190,7 @@ M.parse = function(input)
         -- Cloze format, single line
         if string.len(line) > 2 and line:sub(1,2) == [[> ]] then
             line = line:sub(3, -1)
-            begin_match, end_match = string.find(line, '%*%*.-%*%*')
-
-            -- Replace `` with <code></code>
-            begin_match, end_match = string.find(line, '`.-`')
-            while begin_match do
-              line = line:sub(1, begin_match - 1) .. "<code>" .. line:sub(begin_match + 1, end_match - 1) .. "</code>" .. line:sub(end_match + 1, -1)
-              begin_match, end_match = string.find(line, '`.-`')
-            end
-
-            -- Replace $$ with <anki-mathjax></anki-mathjax>
-            begin_match, end_match = string.find(line, '%$.-%$')
-            while begin_match do
-              line = line:sub(1, begin_match - 1) .. "<anki-mathjax>" .. line:sub(begin_match + 1, end_match - 1) .. "</anki-mathjax>" .. line:sub(end_match + 1, -1)
-              begin_match, end_match = string.find(line, '%$.-%$')
-            end
+            line = convert_line_to_anki_format(line)
 
             -- Replace ** with {{c1::}}
             cloze_idx = 1

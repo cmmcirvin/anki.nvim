@@ -650,39 +650,18 @@ anki.setup = function(user_cfg)
     user_cfg = user_cfg or {}
     Config = vim.tbl_deep_extend("force", Config, user_cfg)
 
-    if Config.tex_support then
-        vim.filetype.add({
-            extension = {
-                anki = "tex.anki",
-            },
-        })
-
-        vim.api.nvim_create_autocmd("FileType", {
-            group = AUTOCMD_GROUP,
-            pattern = "tex.anki",
-            callback = function()
-                local status, res = pcall(launch)
-                if not status then
-                    vim.schedule(function()
-                        UTIL.notify_error(vim.inspect(res))
-                    end)
-                end
-            end,
-        })
-    else
-        vim.api.nvim_create_autocmd("FileType", {
-            group = AUTOCMD_GROUP,
-            pattern = "markdown",
-            callback = function()
-                local status, res = pcall(launch)
-                if not status then
-                    vim.schedule(function()
-                        UTIL.notify_error(vim.inspect(res))
-                    end)
-                end
-            end,
-        })
-    end
+    vim.api.nvim_create_autocmd("FileType", {
+        group = AUTOCMD_GROUP,
+        pattern = "markdown",
+        callback = function()
+            local status, res = pcall(launch)
+            if not status then
+                vim.schedule(function()
+                    UTIL.notify_error(vim.inspect(res))
+                end)
+            end
+        end,
+    })
 end
 
 local Target = {

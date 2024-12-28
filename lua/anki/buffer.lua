@@ -102,12 +102,11 @@ convert_line_to_anki_format = function(line)
     begin_match, end_match = string.find(line, '!%[%]%(.-%)')
     while begin_match do
       img_path = line:sub(begin_match + 4, end_match - 1)
-      begin_username, end_username = string.find(img_path, "/Users")
+      begin_username, end_username = string.find(img_path, "/")
       img_path = img_path:sub(begin_username, -1)
       img_name = string.match(img_path, ".-([^/]-[^/%.]+)$")
 
-      line = line:sub(1, begin_match - 1) .. '<img src="' .. img_name .. '">' .. line:sub(end_match + 1, -1)
-
+      line = line:sub(2, begin_match - 1) .. '<img src="' .. img_name .. '">' .. line:sub(end_match + 1, -1)
       -- Store image in Anki, so that it can be referenced later
       status, data = pcall(require("anki.api").storeMediaFile, {
           filename = img_name,

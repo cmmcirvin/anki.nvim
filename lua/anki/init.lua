@@ -646,6 +646,13 @@ end
 --- Used to crate association of '.anki' extension to 'anki' filetype (or 'tex.anki' if |anki.TexSupport| is enabled in config) and setup the user's config.
 ---@param user_cfg Config see |anki.Config|
 anki.setup = function(user_cfg)
+    -- Provide ability to disable plugin
+    -- This is useful because markdown files try to connect to Anki
+    --   by default, which is not desired behavior when Anki is not running
+    if (user_cfg.enabled == false) then
+      return
+    end
+    print("enabled")
     Config.linters = require("anki.linters").default_linters()
     user_cfg = user_cfg or {}
     Config = vim.tbl_deep_extend("force", Config, user_cfg)

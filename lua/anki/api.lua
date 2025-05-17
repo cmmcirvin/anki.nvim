@@ -105,6 +105,12 @@ end
 
 API.addCards = function(parsed)
     deckName = vim.fn.input("Deck Name: ")
+
+    if not vim.tbl_contains(API.deckNames(), deckName) then
+      error("Deck \"" .. deckName .. "\" does not exist")
+      return
+    end
+
     for i, v in ipairs(parsed.cards) do
       v.deckName = deckName
 
@@ -166,6 +172,19 @@ API.storeMediaFile = function(params)
         action = "storeMediaFile",
         version = 6,
         params = params,
+    })
+
+    if status then
+        return res
+    else
+        error(res)
+    end
+end
+
+API.getDeckNames = function()
+    local status, res = pcall(API.request, {
+        action = "deckNames",
+        version = 6,
     })
 
     if status then

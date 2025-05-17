@@ -652,7 +652,6 @@ anki.setup = function(user_cfg)
     if (user_cfg.enabled == false) then
       return
     end
-    print("enabled")
     Config.linters = require("anki.linters").default_linters()
     user_cfg = user_cfg or {}
     Config = vim.tbl_deep_extend("force", Config, user_cfg)

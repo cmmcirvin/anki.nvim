@@ -186,7 +186,7 @@ M.parse = function(input)
           goto continue
         end
 
-        -- Cloze format, single line
+        -- Check for valid cloze format
         if string.len(line) > 2 and line:sub(1,2) == [[> ]] then
             line = line:sub(3, -1)
             line = convert_line_to_anki_format(line)
@@ -195,7 +195,16 @@ M.parse = function(input)
             cloze_idx = 1
             begin_match, end_match = string.find(line, '%*%*.-%*%*')
             while begin_match do
-              line = line:sub(1, begin_match - 1) .. "{{c" .. cloze_idx .. "::" .. line:sub(begin_match + 2, end_match - 2) .. "}}" .. line:sub(end_match + 1, -1)
+
+              -- Split up the line for readability
+              before_match = line:sub(1, begin_match - 1)
+              cloze = "{{c" .. cloze_idx .. "::" .. line:sub(begin_match + 2, end_match - 2) .. "}}"
+              after_match = line:sub(end_match + 1, -1)
+
+              -- Replace the line with the formatted cloze
+              line = before_match .. cloze .. after_match
+
+              -- Find next occurrence of ** and increment cloze index
               begin_match, end_match = string.find(line, '%*%*.-%*%*')
               cloze_idx = cloze_idx + 1
             end

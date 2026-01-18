@@ -143,8 +143,16 @@ M.parse = function(input)
 
     card = {}
     in_card = false
+    source = ""
 
     for line_counter, line in ipairs(lines) do
+        -- If first line, check for header (added to all cards as an extra)
+        if line_counter == 1 then
+            if string.len(line) > 3 and line:sub(1, 3) == [[###]] then
+              source = line:sub(3, -1)
+            end
+        end
+
         -- Basic format, new card
         if string.len(line) > 5 and line:sub(1,5) == [[> **_]] then
             if in_card then
@@ -160,7 +168,7 @@ M.parse = function(input)
                 fields = {
                   Front = line,
                   Back = "",
-                  Source = "",
+                  Source = source,
                 }
             }
             in_card = true

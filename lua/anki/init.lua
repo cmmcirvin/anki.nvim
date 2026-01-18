@@ -647,8 +647,6 @@ end
 ---@param user_cfg Config see |anki.Config|
 anki.setup = function(user_cfg)
     -- Provide ability to disable plugin
-    -- This is useful because markdown files try to connect to Anki
-    --   by default, which is not desired behavior when Anki is not running
     if (user_cfg.enabled == false) then
       return
     end
@@ -656,18 +654,8 @@ anki.setup = function(user_cfg)
     user_cfg = user_cfg or {}
     Config = vim.tbl_deep_extend("force", Config, user_cfg)
 
-    vim.api.nvim_create_autocmd("FileType", {
-        group = AUTOCMD_GROUP,
-        pattern = "markdown",
-        callback = function()
-            local status, res = pcall(launch)
-            if not status then
-                vim.schedule(function()
-                    UTIL.notify_error(vim.inspect(res))
-                end)
-            end
-        end,
-    })
+    launch()
+
 end
 
 local Target = {
